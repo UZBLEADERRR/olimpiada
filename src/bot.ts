@@ -70,7 +70,7 @@ const registrationScene = new Scenes.WizardScene<MyContext>(
   },
   async (ctx) => {
     if (ctx.callbackQuery && 'data' in ctx.callbackQuery) {
-      const grade = parseInt(ctx.callbackQuery.data.split('_')[1]);
+      const grade = parseInt(ctx.callbackQuery.data.split('_')[1] || '0');
       const state = ctx.wizard.state as MySceneSession;
       state.grade = grade;
       await ctx.answerCbQuery();
