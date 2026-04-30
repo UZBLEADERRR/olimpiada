@@ -174,14 +174,14 @@ bot.hears('📞 Admin bilan aloqa', async (ctx) => {
 // Admin Actions
 bot.action(/approve_(\d+)/, async (ctx) => {
   const match = ctx.match as RegExpExecArray;
-  const id = parseInt(match[1]);
+  const id = parseInt(match[1] || '0');
   const student = await Student.findByPk(id);
   if (student) {
     student.paymentStatus = 'approved';
     await student.save();
     await ctx.answerCbQuery('Tasdiqlandi');
     const message = ctx.callbackQuery?.message;
-    const caption = message && 'caption' in message ? message.caption : '';
+    const caption = message && 'caption' in message ? (message as any).caption : '';
     await ctx.editMessageCaption((caption || '') + '\n\n✅ HOLAT: TASDIQLANDI');
     
     await bot.telegram.sendMessage(student.telegramId, '✅ To‘lovingiz tasdiqlandi. Siz ro‘yxatdan o‘tdingiz.');
@@ -190,14 +190,14 @@ bot.action(/approve_(\d+)/, async (ctx) => {
 
 bot.action(/reject_(\d+)/, async (ctx) => {
   const match = ctx.match as RegExpExecArray;
-  const id = parseInt(match[1]);
+  const id = parseInt(match[1] || '0');
   const student = await Student.findByPk(id);
   if (student) {
     student.paymentStatus = 'rejected';
     await student.save();
     await ctx.answerCbQuery('Rad etildi');
     const message = ctx.callbackQuery?.message;
-    const caption = message && 'caption' in message ? message.caption : '';
+    const caption = message && 'caption' in message ? (message as any).caption : '';
     await ctx.editMessageCaption((caption || '') + '\n\n❌ HOLAT: RAD ETILDI');
     
     await bot.telegram.sendMessage(student.telegramId, '❌ Chekingiz tasdiqlanmadi. Iltimos, to‘g‘ri chek yuboring.');
