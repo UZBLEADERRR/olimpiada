@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - Matematika Olimpiada</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #6366f1;
+            --bg: #0f172a;
+            --card-bg: #1e293b;
+            --text: #f8fafc;
+            --accent: #818cf8;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 16px;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+
+        h1 {
+            font-size: 20px;
+            margin: 0;
+            background: linear-gradient(to right, #818cf8, #c084fc);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+
+        .stat-card {
+            background: var(--card-bg);
+            padding: 16px;
+            border-radius: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: #94a3b8;
+            margin-bottom: 4px;
+        }
+
+        .stat-value {
+            font-size: 24px;
+            font-weight: 600;
+        }
+
+        .filters {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+            overflow-x: auto;
+            padding-bottom: 8px;
+        }
+
+        .filter-btn {
+            background: var(--card-bg);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: var(--text);
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 13px;
+            white-space: nowrap;
+            cursor: pointer;
+        }
+
+        .filter-btn.active {
+            background: var(--primary);
+            border-color: var(--primary);
+        }
+
+        .student-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .student-card {
+            background: var(--card-bg);
+            padding: 16px;
+            border-radius: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            position: relative;
+        }
+
+        .student-name {
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .student-info {
+            font-size: 13px;
+            color: #94a3b8;
+        }
+
+        .status-badge {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            font-size: 10px;
+            padding: 4px 8px;
+            border-radius: 8px;
+            text-transform: uppercase;
+        }
+
+        .status-approved { background: #059669; color: white; }
+        .status-pending { background: #d97706; color: white; }
+        .status-rejected { background: #dc2626; color: white; }
+
+        .loader {
+            text-align: center;
+            padding: 40px;
+            color: #94a3b8;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Admin Panel</h1>
+        <div id="username" style="font-size: 12px; color: #94a3b8;"></div>
+    </div>
+
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-label">Jami</div>
+            <div class="stat-value" id="total-count">0</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Tasdiqlangan</div>
+            <div class="stat-value" id="approved-count">0</div>
+        </div>
+    </div>
+
+    <div class="filters" id="filters">
+        <button class="filter-btn active" onclick="filterByGrade('all')">Hammasi</button>
+        <button class="filter-btn" onclick="filterByGrade(1)">1-sinf</button>
+        <button class="filter-btn" onclick="filterByGrade(2)">2-sinf</button>
+        <button class="filter-btn" onclick="filterByGrade(3)">3-sinf</button>
+        <button class="filter-btn" onclick="filterByGrade(4)">4-sinf</button>
+        <button class="filter-btn" onclick="filterByGrade(5)">5-sinf</button>
+        <button class="filter-btn" onclick="filterByGrade(6)">6-sinf</button>
+        <button class="filter-btn" onclick="filterByGrade(7)">7-sinf</button>
+        <button class="filter-btn" onclick="filterByGrade(8)">8-sinf</button>
+    </div>
+
+    <div id="loader" class="loader">Yuklanmoqda...</div>
+    <div class="student-list" id="student-list"></div>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.expand();
+
+        let allStudents = [];
+        let currentFilter = 'all';
+
+        async function fetchData() {
+            try {
+                const response = await fetch('/api/students');
+                const data = await response.json();
+                allStudents = data;
+                updateStats();
+                renderList();
+            } catch (error) {
+                console.error('Error fetching data:', error);
+                document.getElementById('loader').innerText = 'Xatolik yuz berdi';
+            }
+        }
+
+        function updateStats() {
+            document.getElementById('total-count').innerText = allStudents.length;
+            document.getElementById('approved-count').innerText = allStudents.filter(s => s.paymentStatus === 'approved').length;
+        }
+
+        function filterByGrade(grade) {
+            currentFilter = grade;
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.innerText.includes(grade) || (grade === 'all' && btn.innerText === 'Hammasi')) {
+                    btn.classList.add('active');
+                }
+            });
+            renderList();
+        }
+
+        function renderList() {
+            const list = document.getElementById('student-list');
+            const loader = document.getElementById('loader');
+            list.innerHTML = '';
+            
+            const filtered = currentFilter === 'all' 
+                ? allStudents 
+                : allStudents.filter(s => s.grade == currentFilter);
+
+            if (filtered.length === 0) {
+                loader.innerText = 'Ma’lumot topilmadi';
+                loader.style.display = 'block';
+            } else {
+                loader.style.display = 'none';
+                filtered.forEach(student => {
+                    const card = document.createElement('div');
+                    card.className = 'student-card';
+                    card.innerHTML = `
+                        <div class="status-badge status-${student.paymentStatus}">${student.paymentStatus}</div>
+                        <div class="student-name">${student.fullName}</div>
+                        <div class="student-info">${student.grade}-sinf | ${student.school}</div>
+                        <div class="student-info" style="margin-top: 4px;">📞 ${student.phone}</div>
+                    `;
+                    list.appendChild(card);
+                });
+            }
+        }
+
+        fetchData();
+    </script>
+</body>
+</html>

@@ -4,11 +4,15 @@ import { Student, initDB } from './database';
 import ExcelJS from 'exceljs';
 import fs from 'fs';
 import path from 'path';
+import express from 'express';
+import cors from 'cors';
 
 dotenv.config();
 
 const token = process.env.BOT_TOKEN;
 const adminId = process.env.ADMIN_ID ? parseInt(process.env.ADMIN_ID) : null;
+const port = process.env.PORT || 3000;
+const domain = process.env.RAILWAY_PUBLIC_DOMAIN || ''; // Railway provides this
 
 if (!token) {
   console.error('BOT_TOKEN is not defined in .env file');
@@ -26,11 +30,26 @@ type MyContext = Scenes.WizardContext<MySceneSession>;
 
 const bot = new Telegraf<MyContext>(token);
 
+// Express setup for Mini App
+const app = express();
+app.use(cors());
+app.use(express.json());
+app.use(express.static('public'));
+
+app.get('/api/students', async (req, res) => {
+  try {
+    const students = await Student.findAll({ order: [['createdAt', 'DESC']] });
+    res.json(students);
+  } catch (err) {
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
 // Registration Scene
 const registrationScene = new Scenes.WizardScene<MyContext>(
   'registration_wizard',
   async (ctx) => {
-    await ctx.reply('Ism va familiyangizni kiriting:');
+    await ctx.reply('👤 Ism va familiyangizni kiriting:');
     return ctx.wizard.next();
   },
   async (ctx) => {
@@ -38,25 +57,24 @@ const registrationScene = new Scenes.WizardScene<MyContext>(
       const state = ctx.wizard.state as MySceneSession;
       state.fullName = ctx.message.text;
       await ctx.reply(
-        'Sinfingizni tanlang:',
-        Markup.keyboard([
-          ['1-sinf', '2-sinf', '3-sinf', '4-sinf'],
-          ['5-sinf', '6-sinf', '7-sinf', '8-sinf'],
-        ]).oneTime().resize()
+        '📚 Sinfingizni tanlang:',
+        Markup.inlineKeyboard([
+          [Markup.button.callback('1-sinf', 'grade_1'), Markup.button.callback('2-sinf', 'grade_2')],
+          [Markup.button.callback('3-sinf', 'grade_3'), Markup.button.callback('4-sinf', 'grade_4')],
+          [Markup.button.callback('5-sinf', 'grade_5'), Markup.button.callback('6-sinf', 'grade_6')],
+          [Markup.button.callback('7-sinf', 'grade_7'), Markup.button.callback('8-sinf', 'grade_8')],
+        ])
       );
       return ctx.wizard.next();
     }
   },
   async (ctx) => {
-    if (ctx.message && 'text' in ctx.message) {
-      const grade = parseInt(ctx.message.text);
-      if (isNaN(grade) || grade < 1 || grade > 8) {
-        await ctx.reply('Iltimos, tugmalardan birini tanlang (1-8 sinf).');
-        return;
-      }
+    if (ctx.callbackQuery && 'data' in ctx.callbackQuery) {
+      const grade = parseInt(ctx.callbackQuery.data.split('_')[1]);
       const state = ctx.wizard.state as MySceneSession;
       state.grade = grade;
-      await ctx.reply('Maktabingiz nomini kiriting:');
+      await ctx.answerCbQuery();
+      await ctx.editMessageText(`✅ Tanlangan sinf: ${grade}\n\n🏫 Maktabingiz nomini kiriting:`);
       return ctx.wizard.next();
     }
   },
@@ -64,7 +82,7 @@ const registrationScene = new Scenes.WizardScene<MyContext>(
     if (ctx.message && 'text' in ctx.message) {
       const state = ctx.wizard.state as MySceneSession;
       state.school = ctx.message.text;
-      await ctx.reply('Telefon raqamingizni kiriting (masalan: +998901234567):', Markup.keyboard([
+      await ctx.reply('📞 Telefon raqamingizni kiriting (masalan: +998901234567):', Markup.keyboard([
         [Markup.button.contactRequest('📞 Telefon raqamni yuborish')]
       ]).oneTime().resize());
       return ctx.wizard.next();
@@ -111,7 +129,7 @@ const registrationScene = new Scenes.WizardScene<MyContext>(
         paymentStatus: 'pending',
       });
 
-      await ctx.reply('✅ Chekingiz qabul qilindi. Admin tasdiqlashini kuting.');
+      await ctx.reply('✅ Siz muvaffaqiyatli ro‘yxatdan o‘tdingiz! Admin to‘lovingizni tasdiqlaganidan so‘ng sizga xabar yuboramiz.');
 
       // Notify Admin
       if (adminId) {
@@ -124,7 +142,6 @@ const registrationScene = new Scenes.WizardScene<MyContext>(
                 [Markup.button.callback('❌ Rad etish', `reject_${student.id}`)]
             ])
         }).catch(async () => {
-             // If file is a document
              await ctx.telegram.sendDocument(adminId, fileId, {
                 caption: adminMsg,
                 ...Markup.inlineKeyboard([
@@ -146,32 +163,76 @@ const stage = new Scenes.Stage<MyContext>([registrationScene]);
 bot.use(session());
 bot.use(stage.middleware());
 
+// Main Menu Inline Keyboard
+const mainMenu = Markup.inlineKeyboard([
+  [Markup.button.callback('📋 Ro‘yxatdan o‘tish', 'start_reg')],
+  [Markup.button.callback('ℹ️ Olimpiada haqida', 'info'), Markup.button.callback('💳 To‘lov ma’lumotlari', 'payment')],
+  [Markup.button.callback('📞 Admin bilan aloqa', 'contact')],
+]);
+
+const adminMenu = (webapp_url: string) => Markup.inlineKeyboard([
+    [Markup.button.webApp('📊 Admin Panel (Mini App)', webapp_url)],
+    [Markup.button.callback('📋 Ro‘yxatdan o‘tish', 'start_reg')],
+    [Markup.button.callback('📉 Excel Export', 'export_data')],
+]);
+
 // Commands
 bot.start(async (ctx) => {
-  const startText = `🏆 MATEMATIKA OLIMPIADA \n\n📍 Hudud: Shofirkon tumani\n🏫 Joy: IDROK School xususiy maktabi\n📅 Sana: 10-may\n⏰ Vaqt: 08:30\n\nOlimpiada 1–8-sinf o‘quvchilari uchun tashkil etiladi.\nHar bir sinf o‘quvchilari alohida bellashadi.\n\n💰 Ro‘yxatdan o‘tish narxi: 50 000 so‘m\n\nRo‘yxatdan o‘tish uchun pastdagi tugmani bosing.`;
+  const startText = `🏆 MATEMATIKA OLIMPIADA \n\n📍 Hudud: Shofirkon tumani\n🏫 Joy: IDROK School xususiy maktabi\n📅 Sana: 10-may\n⏰ Vaqt: 08:30\n\nOlimpiada 1–8-sinf o‘quvchilari uchun tashkil etiladi.\nHar bir sinf o‘quvchilari alohida bellashadi.\n\n💰 Ro‘yxatdan o‘tish narxi: 50 000 so‘m\n\nPastdagi tugmalar orqali kerakli bo'limni tanlang.`;
   
-  await ctx.reply(startText, Markup.keyboard([
-    ['📋 Ro‘yxatdan o‘tish'],
-    ['ℹ️ Olimpiada haqida', '💳 To‘lov ma’lumotlari'],
-    ['📞 Admin bilan aloqa']
-  ]).resize());
+  if (ctx.from?.id === adminId) {
+    const webapp_url = `https://${domain}`;
+    await ctx.reply(startText, adminMenu(webapp_url));
+  } else {
+    await ctx.reply(startText, mainMenu);
+  }
 });
 
-bot.hears('📋 Ro‘yxatdan o‘tish', (ctx) => ctx.scene.enter('registration_wizard'));
-
-bot.hears('ℹ️ Olimpiada haqida', async (ctx) => {
-  await ctx.reply(`🏆 MATEMATIKA OLIMPIADA \n\n📍 Hudud: Shofirkon tumani\n🏫 Joy: IDROK School xususiy maktabi\n📅 Sana: 10-may\n⏰ Vaqt: 08:30\n\nOlimpiada 1–8-sinf o‘quvchilari uchun tashkil etiladi.\nHar bir sinf o‘quvchilari alohida bellashadi.`);
+bot.action('start_reg', (ctx) => ctx.scene.enter('registration_wizard'));
+bot.action('info', async (ctx) => {
+  await ctx.answerCbQuery();
+  await ctx.reply(`🏆 MATEMATIKA OLIMPIADA \n\n📍 Hudud: Shofirkon tumani\n🏫 Joy: IDROK School xususiy maktabi\n📅 Sana: 10-may\n⏰ Vaqt: 08:30\n\nOlimpiada 1–8-sinf o‘quvchilari uchun tashkil etiladi.\nHar bir sinf o‘quvchilari alohida bellashadi.`, mainMenu);
 });
 
-bot.hears('💳 To‘lov ma’lumotlari', async (ctx) => {
-  await ctx.reply(`💳 Ro‘yxatdan o‘tish to‘lovi: 50 000 so‘m\n\nKarta raqami:\n5614 6887 0489 8500\n\nKarta egasi:\nUbaydullayev Muhammadali`);
+bot.action('payment', async (ctx) => {
+  await ctx.answerCbQuery();
+  await ctx.reply(`💳 Ro‘yxatdan o‘tish to‘lovi: 50 000 so‘m\n\nKarta raqami:\n5614 6887 0489 8500\n\nKarta egasi:\nUbaydullayev Muhammadali`, mainMenu);
 });
 
-bot.hears('📞 Admin bilan aloqa', async (ctx) => {
-  await ctx.reply(`📞 Savollaringiz bo'lsa, @admin_user ga murojaat qiling.`);
+bot.action('contact', async (ctx) => {
+  await ctx.answerCbQuery();
+  await ctx.reply(`📞 Savollaringiz bo'lsa, @admin_user ga murojaat qiling.`, mainMenu);
 });
 
-// Admin Actions
+bot.action('export_data', async (ctx) => {
+    if (ctx.from?.id !== adminId) return;
+    await ctx.answerCbQuery('Eksport qilinmoqda...');
+    
+    const students = await Student.findAll();
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Students');
+  
+    worksheet.columns = [
+      { header: 'ID', key: 'id', width: 10 },
+      { header: 'Telegram ID', key: 'telegramId', width: 15 },
+      { header: 'Ism Familiya', key: 'fullName', width: 30 },
+      { header: 'Sinf', key: 'grade', width: 10 },
+      { header: 'Maktab', key: 'school', width: 30 },
+      { header: 'Telefon', key: 'phone', width: 20 },
+      { header: 'Holat', key: 'paymentStatus', width: 15 },
+      { header: 'Sana', key: 'createdAt', width: 20 },
+    ];
+  
+    students.forEach(s => worksheet.addRow(s.toJSON()));
+  
+    const buffer = await workbook.xlsx.writeBuffer();
+    const filePath = path.join(__dirname, '..', 'students.xlsx');
+    fs.writeFileSync(filePath, Buffer.from(buffer));
+  
+    await ctx.replyWithDocument({ source: filePath, filename: 'students.xlsx' });
+});
+
+// Admin Actions for Approval
 bot.action(/approve_(\d+)/, async (ctx) => {
   const match = ctx.match as RegExpExecArray;
   const id = parseInt(match[1] || '0');
@@ -184,7 +245,7 @@ bot.action(/approve_(\d+)/, async (ctx) => {
     const caption = message && 'caption' in message ? (message as any).caption : '';
     await ctx.editMessageCaption((caption || '') + '\n\n✅ HOLAT: TASDIQLANDI');
     
-    await bot.telegram.sendMessage(student.telegramId, '✅ To‘lovingiz tasdiqlandi. Siz ro‘yxatdan o‘tdingiz.');
+    await bot.telegram.sendMessage(student.telegramId, '✅ To‘lovingiz tasdiqlandi. Siz muvaffaqiyatli ro‘yxatdan o‘tdingiz!');
   }
 });
 
@@ -200,59 +261,17 @@ bot.action(/reject_(\d+)/, async (ctx) => {
     const caption = message && 'caption' in message ? (message as any).caption : '';
     await ctx.editMessageCaption((caption || '') + '\n\n❌ HOLAT: RAD ETILDI');
     
-    await bot.telegram.sendMessage(student.telegramId, '❌ Chekingiz tasdiqlanmadi. Iltimos, to‘g‘ri chek yuboring.');
+    await bot.telegram.sendMessage(student.telegramId, '❌ Chekingiz tasdiqlanmadi. Iltimos, to‘g‘ri chek yuboring va qayta ro‘yxatdan o‘ting.');
   }
-});
-
-// Admin Commands
-bot.command('stats', async (ctx) => {
-  if (ctx.from?.id !== adminId) return;
-
-  const total = await Student.count();
-  const approved = await Student.count({ where: { paymentStatus: 'approved' } });
-  const pending = await Student.count({ where: { paymentStatus: 'pending' } });
-  
-  let gradeStats = '';
-  for (let i = 1; i <= 8; i++) {
-    const count = await Student.count({ where: { grade: i, paymentStatus: 'approved' } });
-    gradeStats += `\n${i}-sinf: ${count} ta`;
-  }
-
-  await ctx.reply(`📊 Statistika:\n\nJami ro'yxatdan o'tganlar: ${total}\n✅ To'lov tasdiqlangan: ${approved}\n⏳ To'lov kutilmoqda: ${pending}\n\nSinflar bo'yicha (tasdiqlanganlar):${gradeStats}`);
-});
-
-bot.command('export', async (ctx) => {
-  if (ctx.from?.id !== adminId) return;
-
-  const students = await Student.findAll();
-  const workbook = new ExcelJS.Workbook();
-  const worksheet = workbook.addWorksheet('Students');
-
-  worksheet.columns = [
-    { header: 'ID', key: 'id', width: 10 },
-    { header: 'Telegram ID', key: 'telegramId', width: 15 },
-    { header: 'Ism Familiya', key: 'fullName', width: 30 },
-    { header: 'Sinf', key: 'grade', width: 10 },
-    { header: 'Maktab', key: 'school', width: 30 },
-    { header: 'Telefon', key: 'phone', width: 20 },
-    { header: 'Holat', key: 'paymentStatus', width: 15 },
-    { header: 'Sana', key: 'createdAt', width: 20 },
-  ];
-
-  students.forEach(s => worksheet.addRow(s.toJSON()));
-
-  const buffer = await workbook.xlsx.writeBuffer();
-  const filePath = path.join(__dirname, '..', 'students.xlsx');
-  fs.writeFileSync(filePath, Buffer.from(buffer));
-
-  await ctx.replyWithDocument({ source: filePath, filename: 'students.xlsx' });
 });
 
 initDB().then(() => {
   bot.launch();
+  app.listen(port, () => {
+    console.log(`Server is running on port ${port}`);
+  });
   console.log('Bot started');
 });
 
-// Enable graceful stop
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
