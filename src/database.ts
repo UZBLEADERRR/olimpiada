@@ -5,8 +5,15 @@ dotenv.config();
 
 const databaseUrl = process.env.DATABASE_URL;
 
+if (databaseUrl) {
+  console.log('DATABASE_URL found, connecting to PostgreSQL...');
+} else {
+  console.log('DATABASE_URL not found, falling back to SQLite (if sqlite3 is installed)...');
+}
+
 const sequelize = databaseUrl 
   ? new Sequelize(databaseUrl, {
+      dialect: 'postgres',
       logging: false,
       dialectOptions: {
         ssl: {
