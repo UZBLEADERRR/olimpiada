@@ -181,8 +181,13 @@ bot.start(async (ctx) => {
   const startText = `🏆 MATEMATIKA OLIMPIADA \n\n📍 Hudud: Shofirkon tumani\n🏫 Joy: IDROK School xususiy maktabi\n📅 Sana: 10-may\n⏰ Vaqt: 08:30\n\nOlimpiada 1–8-sinf o‘quvchilari uchun tashkil etiladi.\nHar bir sinf o‘quvchilari alohida bellashadi.\n\n💰 Ro‘yxatdan o‘tish narxi: 50 000 so‘m\n\nPastdagi tugmalar orqali kerakli bo'limni tanlang.`;
   
   if (ctx.from?.id === adminId) {
-    const webapp_url = `https://${domain}`;
-    await ctx.reply(startText, adminMenu(webapp_url));
+    if (domain) {
+      const webapp_url = `https://${domain}`;
+      await ctx.reply(startText, adminMenu(webapp_url));
+    } else {
+      // Fallback if domain is not set
+      await ctx.reply(startText + '\n\n⚠️ Eslatma: RAILWAY_PUBLIC_DOMAIN o\'rnatilmagan, Admin Panel ishlamasligi mumkin.', adminMenu('https://railway.app'));
+    }
   } else {
     await ctx.reply(startText, mainMenu);
   }
