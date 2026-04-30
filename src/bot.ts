@@ -15,18 +15,27 @@ if (!token) {
   process.exit(1);
 }
 
-const bot = new Telegraf<Scenes.SceneContext>(token);
+interface MySceneSession extends Scenes.WizardSessionData {
+  fullName: string;
+  grade: number;
+  school: string;
+  phone: string;
+}
+
+type MyContext = Scenes.WizardContext<MySceneSession>;
+
+const bot = new Telegraf<MyContext>(token);
 
 // Registration Scene
-const registrationScene = new Scenes.WizardScene(
+const registrationScene = new Scenes.WizardScene<MyContext>(
   'registration_wizard',
   async (ctx) => {
     await ctx.reply('Ism va familiyangizni kiriting:');
     return ctx.wizard.next();
   },
   async (ctx) => {
-    if ('text' in ctx.message!) {
-      (ctx.wizard.state as any).fullName = ctx.message.text;
+    if (ctx.message && 'text' in ctx.message) {
+      ctx.wizard.state.fullName = ctx.message.text;
       await ctx.reply(
         'Sinfingizni tanlang:',
         Markup.keyboard([
@@ -38,20 +47,20 @@ const registrationScene = new Scenes.WizardScene(
     }
   },
   async (ctx) => {
-    if ('text' in ctx.message!) {
+    if (ctx.message && 'text' in ctx.message) {
       const grade = parseInt(ctx.message.text);
       if (isNaN(grade) || grade < 1 || grade > 8) {
         await ctx.reply('Iltimos, tugmalardan birini tanlang (1-8 sinf).');
         return;
       }
-      (ctx.wizard.state as any).grade = grade;
+      ctx.wizard.state.grade = grade;
       await ctx.reply('Maktabingiz nomini kiriting:');
       return ctx.wizard.next();
     }
   },
   async (ctx) => {
-    if ('text' in ctx.message!) {
-      (ctx.wizard.state as any).school = ctx.message.text;
+    if (ctx.message && 'text' in ctx.message) {
+      ctx.wizard.state.school = ctx.message.text;
       await ctx.reply('Telefon raqamingizni kiriting (masalan: +998901234567):', Markup.keyboard([
         [Markup.button.contactRequest('📞 Telefon raqamni yuborish')]
       ]).oneTime().resize());
@@ -60,16 +69,14 @@ const registrationScene = new Scenes.WizardScene(
   },
   async (ctx) => {
     let phone = '';
-    if ('contact' in ctx.message!) {
+    if (ctx.message && 'contact' in ctx.message) {
       phone = ctx.message.contact.phone_number;
-    } else if ('text' in ctx.message!) {
+    } else if (ctx.message && 'text' in ctx.message) {
       phone = ctx.message.text;
     }
 
     if (phone) {
-      (ctx.wizard.state as any).phone = phone;
-      const state = ctx.wizard.state as any;
-
+      ctx.wizard.state.phone = phone;
       await ctx.reply(
         `💳 Ro‘yxatdan o‘tish to‘lovi: 50 000 so‘m\n\nKarta raqami:\n5614 6887 0489 8500\n\nKarta egasi:\nUbaydullayev Muhammadali\n\nTo‘lov qilgandan so‘ng chek rasmini yoki PDF faylni shu botga yuboring.`,
         Markup.removeKeyboard()
@@ -79,14 +86,14 @@ const registrationScene = new Scenes.WizardScene(
   },
   async (ctx) => {
     let fileId = '';
-    if ('photo' in ctx.message!) {
+    if (ctx.message && 'photo' in ctx.message) {
       fileId = ctx.message.photo[ctx.message.photo.length - 1].file_id;
-    } else if ('document' in ctx.message!) {
+    } else if (ctx.message && 'document' in ctx.message) {
       fileId = ctx.message.document.file_id;
     }
 
     if (fileId) {
-      const state = ctx.wizard.state as any;
+      const state = ctx.wizard.state;
       
       // Save to DB
       const student = await Student.create({
@@ -130,7 +137,7 @@ const registrationScene = new Scenes.WizardScene(
   }
 );
 
-const stage = new Scenes.Stage([registrationScene]);
+const stage = new Scenes.Stage<MyContext>([registrationScene]);
 bot.use(session());
 bot.use(stage.middleware());
 
@@ -161,26 +168,28 @@ bot.hears('📞 Admin bilan aloqa', async (ctx) => {
 
 // Admin Actions
 bot.action(/approve_(\d+)/, async (ctx) => {
-  const id = parseInt(ctx.match[1]);
+  const match = ctx.match as RegExpExecArray;
+  const id = parseInt(match[1]);
   const student = await Student.findByPk(id);
   if (student) {
     student.paymentStatus = 'approved';
     await student.save();
     await ctx.answerCbQuery('Tasdiqlandi');
-    await ctx.editMessageCaption(ctx.callbackQuery.message && 'caption' in ctx.callbackQuery.message ? ctx.callbackQuery.message.caption + '\n\n✅ HOLAT: TASDIQLANDI' : '✅ TASDIQLANDI');
+    await ctx.editMessageCaption(ctx.callbackQuery?.message && 'caption' in ctx.callbackQuery.message ? ctx.callbackQuery.message.caption + '\n\n✅ HOLAT: TASDIQLANDI' : '✅ TASDIQLANDI');
     
     await bot.telegram.sendMessage(student.telegramId, '✅ To‘lovingiz tasdiqlandi. Siz ro‘yxatdan o‘tdingiz.');
   }
 });
 
 bot.action(/reject_(\d+)/, async (ctx) => {
-  const id = parseInt(ctx.match[1]);
+  const match = ctx.match as RegExpExecArray;
+  const id = parseInt(match[1]);
   const student = await Student.findByPk(id);
   if (student) {
     student.paymentStatus = 'rejected';
     await student.save();
     await ctx.answerCbQuery('Rad etildi');
-    await ctx.editMessageCaption(ctx.callbackQuery.message && 'caption' in ctx.callbackQuery.message ? ctx.callbackQuery.message.caption + '\n\n❌ HOLAT: RAD ETILDI' : '❌ RAD ETILDI');
+    await ctx.editMessageCaption(ctx.callbackQuery?.message && 'caption' in ctx.callbackQuery.message ? ctx.callbackQuery.message.caption + '\n\n❌ HOLAT: RAD ETILDI' : '❌ RAD ETILDI');
     
     await bot.telegram.sendMessage(student.telegramId, '❌ Chekingiz tasdiqlanmadi. Iltimos, to‘g‘ri chek yuboring.');
   }
@@ -188,7 +197,7 @@ bot.action(/reject_(\d+)/, async (ctx) => {
 
 // Admin Commands
 bot.command('stats', async (ctx) => {
-  if (ctx.from.id !== adminId) return;
+  if (ctx.from?.id !== adminId) return;
 
   const total = await Student.count();
   const approved = await Student.count({ where: { paymentStatus: 'approved' } });
@@ -204,7 +213,7 @@ bot.command('stats', async (ctx) => {
 });
 
 bot.command('export', async (ctx) => {
-  if (ctx.from.id !== adminId) return;
+  if (ctx.from?.id !== adminId) return;
 
   const students = await Student.findAll();
   const workbook = new ExcelJS.Workbook();
