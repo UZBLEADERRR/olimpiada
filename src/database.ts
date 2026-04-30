@@ -5,6 +5,7 @@ const sequelize = new Sequelize({
   dialect: 'sqlite',
   storage: path.join(__dirname, '..', 'database.sqlite'),
   logging: false,
+  dialectModule: require('better-sqlite3'),
 });
 
 export class Student extends Model {
