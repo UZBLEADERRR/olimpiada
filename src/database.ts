@@ -1,12 +1,25 @@
 import { Sequelize, DataTypes, Model } from 'sequelize';
-import path from 'path';
+import * as dotenv from 'dotenv';
 
-const sequelize = new Sequelize({
-  dialect: 'sqlite',
-  storage: path.join(__dirname, '..', 'database.sqlite'),
-  logging: false,
-  dialectModule: require('better-sqlite3'),
-});
+dotenv.config();
+
+const databaseUrl = process.env.DATABASE_URL;
+
+const sequelize = databaseUrl 
+  ? new Sequelize(databaseUrl, {
+      logging: false,
+      dialectOptions: {
+        ssl: {
+          require: true,
+          rejectUnauthorized: false
+        }
+      }
+    })
+  : new Sequelize({
+      dialect: 'sqlite',
+      storage: 'database.sqlite',
+      logging: false,
+    });
 
 export class Student extends Model {
   public id!: number;
@@ -63,8 +76,14 @@ Student.init(
 );
 
 export const initDB = async () => {
-  await sequelize.sync();
-  console.log('Database synced');
+  try {
+    await sequelize.authenticate();
+    console.log('Database connection established.');
+    await sequelize.sync();
+    console.log('Database synced');
+  } catch (error) {
+    console.error('Unable to connect to the database:', error);
+  }
 };
 
 export default Student;
