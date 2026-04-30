@@ -35,7 +35,8 @@ const registrationScene = new Scenes.WizardScene<MyContext>(
   },
   async (ctx) => {
     if (ctx.message && 'text' in ctx.message) {
-      ctx.wizard.state.fullName = ctx.message.text;
+      const state = ctx.wizard.state as MySceneSession;
+      state.fullName = ctx.message.text;
       await ctx.reply(
         'Sinfingizni tanlang:',
         Markup.keyboard([
@@ -53,14 +54,16 @@ const registrationScene = new Scenes.WizardScene<MyContext>(
         await ctx.reply('Iltimos, tugmalardan birini tanlang (1-8 sinf).');
         return;
       }
-      ctx.wizard.state.grade = grade;
+      const state = ctx.wizard.state as MySceneSession;
+      state.grade = grade;
       await ctx.reply('Maktabingiz nomini kiriting:');
       return ctx.wizard.next();
     }
   },
   async (ctx) => {
     if (ctx.message && 'text' in ctx.message) {
-      ctx.wizard.state.school = ctx.message.text;
+      const state = ctx.wizard.state as MySceneSession;
+      state.school = ctx.message.text;
       await ctx.reply('Telefon raqamingizni kiriting (masalan: +998901234567):', Markup.keyboard([
         [Markup.button.contactRequest('📞 Telefon raqamni yuborish')]
       ]).oneTime().resize());
@@ -76,7 +79,8 @@ const registrationScene = new Scenes.WizardScene<MyContext>(
     }
 
     if (phone) {
-      ctx.wizard.state.phone = phone;
+      const state = ctx.wizard.state as MySceneSession;
+      state.phone = phone;
       await ctx.reply(
         `💳 Ro‘yxatdan o‘tish to‘lovi: 50 000 so‘m\n\nKarta raqami:\n5614 6887 0489 8500\n\nKarta egasi:\nUbaydullayev Muhammadali\n\nTo‘lov qilgandan so‘ng chek rasmini yoki PDF faylni shu botga yuboring.`,
         Markup.removeKeyboard()
@@ -86,18 +90,19 @@ const registrationScene = new Scenes.WizardScene<MyContext>(
   },
   async (ctx) => {
     let fileId = '';
-    if (ctx.message && 'photo' in ctx.message) {
-      fileId = ctx.message.photo[ctx.message.photo.length - 1].file_id;
-    } else if (ctx.message && 'document' in ctx.message) {
+    if (ctx.message && 'photo' in ctx.message && ctx.message.photo) {
+      const photos = ctx.message.photo;
+      fileId = photos[photos.length - 1]?.file_id || '';
+    } else if (ctx.message && 'document' in ctx.message && ctx.message.document) {
       fileId = ctx.message.document.file_id;
     }
 
-    if (fileId) {
-      const state = ctx.wizard.state;
+    if (fileId && ctx.from) {
+      const state = ctx.wizard.state as MySceneSession;
       
       // Save to DB
       const student = await Student.create({
-        telegramId: ctx.from?.id,
+        telegramId: ctx.from.id,
         fullName: state.fullName,
         grade: state.grade,
         school: state.school,
@@ -175,7 +180,9 @@ bot.action(/approve_(\d+)/, async (ctx) => {
     student.paymentStatus = 'approved';
     await student.save();
     await ctx.answerCbQuery('Tasdiqlandi');
-    await ctx.editMessageCaption(ctx.callbackQuery?.message && 'caption' in ctx.callbackQuery.message ? ctx.callbackQuery.message.caption + '\n\n✅ HOLAT: TASDIQLANDI' : '✅ TASDIQLANDI');
+    const message = ctx.callbackQuery?.message;
+    const caption = message && 'caption' in message ? message.caption : '';
+    await ctx.editMessageCaption((caption || '') + '\n\n✅ HOLAT: TASDIQLANDI');
     
     await bot.telegram.sendMessage(student.telegramId, '✅ To‘lovingiz tasdiqlandi. Siz ro‘yxatdan o‘tdingiz.');
   }
@@ -189,7 +196,9 @@ bot.action(/reject_(\d+)/, async (ctx) => {
     student.paymentStatus = 'rejected';
     await student.save();
     await ctx.answerCbQuery('Rad etildi');
-    await ctx.editMessageCaption(ctx.callbackQuery?.message && 'caption' in ctx.callbackQuery.message ? ctx.callbackQuery.message.caption + '\n\n❌ HOLAT: RAD ETILDI' : '❌ RAD ETILDI');
+    const message = ctx.callbackQuery?.message;
+    const caption = message && 'caption' in message ? message.caption : '';
+    await ctx.editMessageCaption((caption || '') + '\n\n❌ HOLAT: RAD ETILDI');
     
     await bot.telegram.sendMessage(student.telegramId, '❌ Chekingiz tasdiqlanmadi. Iltimos, to‘g‘ri chek yuboring.');
   }
