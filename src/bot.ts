@@ -36,10 +36,37 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
 
+// API Security Middleware
+const isAdmin = (req: express.Request) => {
+  const initData = req.headers['x-tg-init-data'] as string;
+  if (!initData) return false;
+  
+  try {
+    const urlParams = new URLSearchParams(initData);
+    const user = JSON.parse(urlParams.get('user') || '{}');
+    return user.id === adminId;
+  } catch (e) {
+    return false;
+  }
+};
+
 app.get('/api/students', async (req, res) => {
+  if (!isAdmin(req)) return res.status(403).json({ error: 'Unauthorized' });
+  
   try {
     const students = await Student.findAll({ order: [['createdAt', 'DESC']] });
     res.json(students);
+  } catch (err) {
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+app.post('/api/students/clear-all', async (req, res) => {
+  if (!isAdmin(req)) return res.status(403).json({ error: 'Unauthorized' });
+
+  try {
+    await Student.destroy({ where: {}, truncate: true });
+    res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Internal Server Error' });
   }

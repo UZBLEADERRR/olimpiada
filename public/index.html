@@ -164,6 +164,12 @@
     <div id="loader" class="loader">Yuklanmoqda...</div>
     <div class="student-list" id="student-list"></div>
 
+    <div style="margin-top: 40px; padding: 20px; text-align: center;">
+        <button onclick="clearAllData()" style="background: rgba(220, 38, 38, 0.1); color: #ef4444; border: 1px solid rgba(220, 38, 38, 0.2); padding: 12px 24px; border-radius: 12px; font-size: 14px; cursor: pointer; width: 100%;">
+            🗑 Barcha ma'lumotlarni o'chirish
+        </button>
+    </div>
+
     <script>
         const tg = window.Telegram.WebApp;
         tg.expand();
@@ -173,7 +179,15 @@
 
         async function fetchData() {
             try {
-                const response = await fetch('/api/students');
+                const response = await fetch('/api/students', {
+                    headers: {
+                        'x-tg-init-data': tg.initData
+                    }
+                });
+                if (response.status === 403) {
+                    document.getElementById('loader').innerHTML = '<div style="color: #ef4444;">⛔️ Kirish taqiqlangan! <br> Siz admin emassiz.</div>';
+                    return;
+                }
                 const data = await response.json();
                 allStudents = data;
                 updateStats();
@@ -181,6 +195,31 @@
             } catch (error) {
                 console.error('Error fetching data:', error);
                 document.getElementById('loader').innerText = 'Xatolik yuz berdi';
+            }
+        }
+
+        async function clearAllData() {
+            if (!confirm('Haqiqatdan ham BARCHA ma\'lumotlarni o\'chirib tashlamoqchimisiz? Bu amalni ortga qaytarib bo\'lmaydi!')) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/students/clear-all', {
+                    method: 'POST',
+                    headers: {
+                        'x-tg-init-data': tg.initData,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (response.ok) {
+                    tg.showScanQrPopup({ text: "Ma'lumotlar o'chirildi!" }); // Simple way to show toast
+                    setTimeout(() => location.reload(), 1000);
+                } else {
+                    alert('O\'chirishda xatolik yuz berdi');
+                }
+            } catch (error) {
+                alert('Xatolik: ' + error.message);
             }
         }
 
