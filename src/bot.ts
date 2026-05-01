@@ -186,6 +186,37 @@ const registrationScene = new Scenes.WizardScene<MyContext>(
   }
 );
 
+// Allow global commands and actions during registration
+registrationScene.command('start', async (ctx) => {
+    await ctx.scene.leave();
+    const startText = `🏆 MATEMATIKA OLIMPIADA \n\n📍 Hudud: Shofirkon tumani\n🏫 Joy: IDROK School xususiy maktabi\n📅 Sana: 10-may\n⏰ Vaqt: 08:30\n\nOlimpiada 1–8-sinf o‘quvchilari uchun tashkil etiladi.\nHar bir sinf o‘quvchilari alohida bellashadi.\n\n💰 Ro‘yxatdan o‘tish narxi: 50 000 so‘m\n\nPastdagi tugmalar orqali kerakli bo'limni tanlang.`;
+    if (ctx.from?.id === adminId) {
+        const cleanDomain = domain.replace(/^https?:\/\//, '');
+        const webapp_url = `https://${cleanDomain}`;
+        await ctx.reply(startText, adminMenu(webapp_url));
+    } else {
+        await ctx.reply(startText, mainMenu);
+    }
+});
+
+registrationScene.action('info', async (ctx) => {
+    await ctx.scene.leave();
+    await ctx.answerCbQuery();
+    await ctx.reply(`🏆 MATEMATIKA OLIMPIADA \n\n📍 Hudud: Shofirkon tumani\n🏫 Joy: IDROK School xususiy maktabi\n📅 Sana: 10-may\n⏰ Vaqt: 08:30\n\nOlimpiada 1–8-sinf o‘quvchilari uchun tashkil etiladi.\nHar bir sinf o‘quvchilari alohida bellashadi.`, mainMenu);
+});
+
+registrationScene.action('payment', async (ctx) => {
+    await ctx.scene.leave();
+    await ctx.answerCbQuery();
+    await ctx.reply(`💳 Ro‘yxatdan o‘tish to‘lovi: 50 000 so‘m\n\nKarta raqami:\n5614 6887 0489 8500\n\nKarta egasi:\nUbaydullayev Muhammadali`, mainMenu);
+});
+
+registrationScene.action('contact', async (ctx) => {
+    await ctx.scene.leave();
+    await ctx.answerCbQuery();
+    await ctx.reply(`📞 Savollaringiz bo'lsa, @Umidov_008 ga murojaat qiling.`, mainMenu);
+});
+
 const stage = new Scenes.Stage<MyContext>([registrationScene]);
 bot.use(session());
 bot.use(stage.middleware());
@@ -253,7 +284,7 @@ bot.action('payment', async (ctx) => {
 
 bot.action('contact', async (ctx) => {
   await ctx.answerCbQuery();
-  await ctx.reply(`📞 Savollaringiz bo'lsa, @admin_user ga murojaat qiling.`, mainMenu);
+  await ctx.reply(`📞 Savollaringiz bo'lsa, @Umidov_008 ga murojaat qiling.`, mainMenu);
 });
 
 bot.action('export_data', async (ctx) => {
