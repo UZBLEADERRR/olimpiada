@@ -215,6 +215,14 @@
             } else {
                 loader.style.display = 'none';
                 filtered.forEach(student => {
+                    const date = new Date(student.createdAt).toLocaleString('uz-UZ', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    });
+                    
                     const card = document.createElement('div');
                     card.className = 'student-card';
                     card.innerHTML = `
@@ -222,6 +230,9 @@
                         <div class="student-name">${student.fullName}</div>
                         <div class="student-info">${student.grade}-sinf | ${student.school}</div>
                         <div class="student-info" style="margin-top: 4px;">📞 ${student.phone}</div>
+                        <div class="student-info" style="margin-top: 8px; font-size: 11px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 8px;">
+                            📅 ${date}
+                        </div>
                     `;
                     list.appendChild(card);
                 });

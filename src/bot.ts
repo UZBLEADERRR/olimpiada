@@ -182,7 +182,9 @@ bot.start(async (ctx) => {
   
   if (ctx.from?.id === adminId) {
     if (domain) {
-      const webapp_url = `https://${domain}`;
+      // Ensure domain has https:// and no double protocol
+      const cleanDomain = domain.replace(/^https?:\/\//, '');
+      const webapp_url = `https://${cleanDomain}`;
       await ctx.reply(startText, adminMenu(webapp_url));
     } else {
       // Fallback if domain is not set
