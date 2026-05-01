@@ -193,7 +193,25 @@ bot.start(async (ctx) => {
   }
 });
 
-bot.action('start_reg', (ctx) => ctx.scene.enter('registration_wizard'));
+bot.action('start_reg', async (ctx) => {
+  const student = await Student.findOne({ where: { telegramId: ctx.from?.id } });
+  if (student) {
+    let statusEmoji = '⏳';
+    let statusText = 'Kutilmoqda';
+    if (student.paymentStatus === 'approved') {
+        statusEmoji = '✅';
+        statusText = 'Tasdiqlangan';
+    } else if (student.paymentStatus === 'rejected') {
+        statusEmoji = '❌';
+        statusText = 'Rad etilgan';
+    }
+
+    await ctx.answerCbQuery();
+    await ctx.reply(`Siz allaqachon ro‘yxatdan o‘tgansiz!\n\n📋 Ism: ${student.fullName}\n${statusEmoji} Holat: ${statusText}`);
+    return;
+  }
+  return ctx.scene.enter('registration_wizard');
+});
 bot.action('info', async (ctx) => {
   await ctx.answerCbQuery();
   await ctx.reply(`🏆 MATEMATIKA OLIMPIADA \n\n📍 Hudud: Shofirkon tumani\n🏫 Joy: IDROK School xususiy maktabi\n📅 Sana: 10-may\n⏰ Vaqt: 08:30\n\nOlimpiada 1–8-sinf o‘quvchilari uchun tashkil etiladi.\nHar bir sinf o‘quvchilari alohida bellashadi.`, mainMenu);
